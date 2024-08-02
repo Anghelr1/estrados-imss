@@ -4,9 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { EstradosImssModule } from './estrados-imss/estrados-imss.module';
 import { EstradosHttpModule } from './estrados-http/estrados-http.module';
 import * as process from 'node:process';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'mssql',

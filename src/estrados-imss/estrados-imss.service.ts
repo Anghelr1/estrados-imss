@@ -4,6 +4,7 @@ import { EstradosImss } from './entities/EstradosImss';
 import { Repository } from 'typeorm';
 import { EstradosHttpService } from '../estrados-http/estrados-http.service';
 import { saveEstradoImss } from './helpers/estrados-imss.helper';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class EstradosImssService {
@@ -14,6 +15,16 @@ export class EstradosImssService {
     private readonly estradosImssRepository: Repository<EstradosImss>,
     private readonly estradosHttpService: EstradosHttpService,
   ) {}
+
+  @Cron(CronExpression.EVERY_DAY_AT_2AM, {
+    timeZone: 'America/Mexico_City', // Ajusta esto a tu zona horaria
+  })
+  async scheduledGetAndSaveAllEstradosImss() {
+    this.logger.log(
+      'Iniciando tarea programada de sincronización de estrados IMSS',
+    );
+    await this.getAndSaveAllEstradosImss();
+  }
 
   async getAndSaveAllEstradosImss(): Promise<void> {
     this.logger.log('Iniciando sincronización de estrados IMSS');
