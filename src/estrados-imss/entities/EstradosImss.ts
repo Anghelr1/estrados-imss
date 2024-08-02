@@ -13,7 +13,10 @@ export class EstradosImss {
   @Column('bigint')
   cveNotificaciones: number;
 
-  @Column('text')
+  @Column({
+    nullable: true,
+    type: 'text',
+  })
   registroPatronal: string;
 
   @Column('text')
