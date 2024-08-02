@@ -5,6 +5,7 @@ import { EstradosImssModule } from './estrados-imss/estrados-imss.module';
 import { EstradosHttpModule } from './estrados-http/estrados-http.module';
 import * as process from 'node:process';
 import { ScheduleModule } from '@nestjs/schedule';
+import { DownloadDocModule } from './download-doc/download-doc.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     EstradosImssModule,
     EstradosHttpModule,
+    DownloadDocModule,
   ],
   controllers: [],
   providers: [],

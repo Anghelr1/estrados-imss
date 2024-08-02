@@ -15,4 +15,10 @@ export class EstradosImssController {
     await this.estradosImssService.getAndSaveAllEstradosImss();
     return { message: 'Synchronization completed' };
   }
+
+  @Get('sync-docs')
+  async syncEstradosImssDocs() {
+    await this.estradosImssService.downloadAllDocs();
+    return { message: 'Documents synchronization completed' };
+  }
 }

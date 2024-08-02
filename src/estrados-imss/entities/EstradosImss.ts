@@ -75,4 +75,10 @@ export class EstradosImss {
 
   @CreateDateColumn({ name: 'fecha_registro' })
   fechaRegistro: Date;
+
+  @Column('text', { name: 'ruta_archivo_acuerdo', nullable: true })
+  rutaArchivoAcuerdo: string;
+
+  @Column('text', { name: 'ruta_archivo_documento', nullable: true })
+  rutaArchivoDocumento: string;
 }
