@@ -18,7 +18,7 @@ export class DownloadDocService {
     cveNotificaciones: string,
     fileDocName: string,
   ): Promise<string> {
-    const maxRetries = 3;
+    const maxRetries = 10;
     for (let i = 0; i < maxRetries; i++) {
       try {
         await this.waitForCooldown();
@@ -53,7 +53,18 @@ export class DownloadDocService {
         );
 
         const fileName = `${fileDocName}_${cveDoctoAdjunto}.pdf`;
-        const filePath = path.join(process.cwd(), 'downloads', fileName);
+        const folderPath = path.join(
+          process.cwd(),
+          'downloads',
+          cveNotificaciones,
+        );
+        const filePath = path.join(folderPath, fileName);
+
+        // Crear la carpeta si no existe
+        if (!fs.existsSync(folderPath)) {
+          fs.mkdirSync(folderPath, { recursive: true });
+        }
+
         fs.writeFileSync(filePath, response.data);
 
         logger.log(`Archivo guardado como ${filePath}`);
