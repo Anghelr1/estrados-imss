@@ -90,7 +90,6 @@ export class EstradosImssService {
       for (const estrado of estrados) {
         if (estrado.cveDoctoAdjuntoAcuerdo && !estrado.rutaArchivoAcuerdo) {
           try {
-            await this.sleep(3000);
             const filePath = await this.downloadDocService.descargarArchivo(
               estrado.cveDoctoAdjuntoAcuerdo.toString(),
               estrado.cveNotificaciones.toString(),
@@ -113,9 +112,11 @@ export class EstradosImssService {
           );
         }
 
+        // Espera entre descargas de archivos del mismo estrado
+        await this.sleep(3000);
+
         if (estrado.cveDoctoAdjuntoDocumento && !estrado.rutaArchivoDocumento) {
           try {
-            await this.sleep(3000);
             const filePath = await this.downloadDocService.descargarArchivo(
               estrado.cveDoctoAdjuntoDocumento.toString(),
               estrado.cveNotificaciones.toString(),
@@ -137,6 +138,9 @@ export class EstradosImssService {
             `Archivo de documento ya existe para estrado ${estrado.id}: ${estrado.rutaArchivoDocumento}`,
           );
         }
+
+        // Espera entre estrados
+        await this.sleep(3000);
       }
 
       logger.log('Descarga de archivos completada');
