@@ -27,59 +27,23 @@ export class EstradosImssService {
   }
 
   async getAndSaveAllEstradosImss(): Promise<void> {
-    logger.log('Iniciando sincronización de estrados IMSS');
-    try {
-      let start = 0;
-      const length = 1000;
-      let totalRecords = 0;
-      let processedRecords = 0;
-      let batchNumber = 0;
-
-      do {
-        batchNumber++;
-        logger.log(
-          `Iniciando procesamiento del lote ${batchNumber}. Registros procesados: ${processedRecords}`,
+    const maxRetries = 10;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.doGetAndSaveAllEstradosImss();
+        return;
+      } catch (error) {
+        logger.error(
+          `Intento ${attempt} fallido al sincronizar estrados IMSS: ${error.message}`,
         );
-
-        await this.sleep(2000);
-        logger.debug(
-          `Pausa de 2 segundos completada antes del lote ${batchNumber}`,
-        );
-
-        const { aaData, iTotalDisplayRecords } =
-          await this.estradosHttpService.getEstrados(start, length);
-        logger.log(
-          `Datos recibidos para el lote ${batchNumber}. Registros en este lote: ${aaData.length}`,
-        );
-
-        if (totalRecords === 0) {
-          totalRecords = iTotalDisplayRecords;
-          logger.log(`Total de registros a procesar: ${totalRecords}`);
+        if (attempt === maxRetries) {
+          throw new HttpException(
+            'Error al sincronizar estrados IMSS después de múltiples intentos',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
         }
-
-        const estradosPromises = aaData.map((aaDatum) =>
-          saveEstradoImss(aaDatum, this.estradosImssRepository),
-        );
-        await Promise.all(estradosPromises);
-
-        processedRecords += aaData.length;
-        start += length;
-
-        logger.log(
-          `Lote ${batchNumber} completado. Total procesado: ${processedRecords} de ${totalRecords} registros`,
-        );
-      } while (processedRecords < totalRecords);
-
-      logger.log('Sincronización de estrados IMSS completada con éxito');
-    } catch (error) {
-      logger.error(
-        'Error al obtener y guardar los estrados del IMSS',
-        error.stack,
-      );
-      throw new HttpException(
-        'Error al sincronizar estrados IMSS',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+        await this.sleep(5000); // Espera 5 segundos antes de reintentar
+      }
     }
   }
 
@@ -151,6 +115,52 @@ export class EstradosImssService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  private async doGetAndSaveAllEstradosImss(): Promise<void> {
+    logger.log('Iniciando sincronización de estrados IMSS');
+    let start = 0;
+    const length = 1000;
+    let totalRecords = 0;
+    let processedRecords = 0;
+    let batchNumber = 0;
+
+    do {
+      batchNumber++;
+      logger.log(
+        `Iniciando procesamiento del lote ${batchNumber}. Registros procesados: ${processedRecords}`,
+      );
+
+      await this.sleep(2000);
+      logger.debug(
+        `Pausa de 2 segundos completada antes del lote ${batchNumber}`,
+      );
+
+      const { aaData, iTotalDisplayRecords } =
+        await this.estradosHttpService.getEstrados(start, length);
+      logger.log(
+        `Datos recibidos para el lote ${batchNumber}. Registros en este lote: ${aaData.length}`,
+      );
+
+      if (totalRecords === 0) {
+        totalRecords = iTotalDisplayRecords;
+        logger.log(`Total de registros a procesar: ${totalRecords}`);
+      }
+
+      const estradosPromises = aaData.map((aaDatum) =>
+        saveEstradoImss(aaDatum, this.estradosImssRepository),
+      );
+      await Promise.all(estradosPromises);
+
+      processedRecords += aaData.length;
+      start += length;
+
+      logger.log(
+        `Lote ${batchNumber} completado. Total procesado: ${processedRecords} de ${totalRecords} registros`,
+      );
+    } while (processedRecords < totalRecords);
+
+    logger.log('Sincronización de estrados IMSS completada con éxito');
   }
 
   private sleep(ms: number): Promise<void> {

@@ -1,14 +1,44 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { EstradosResponse } from './dto/EstradosResponseDto';
 import { firstValueFrom } from 'rxjs';
+import { AxiosError } from 'axios';
 
 @Injectable()
 export class EstradosHttpService {
+  private readonly logger = new Logger(EstradosHttpService.name);
+  private readonly maxRetries = 10;
+  private readonly retryDelay = 5000; // 5 segundos
+  private lastRequestTime = 0;
+  private readonly cooldownPeriod = 2000; // 2 segundos
+
   constructor(private httpService: HttpService) {}
 
   async getEstrados(
     start: number = 0,
+    length: number,
+  ): Promise<EstradosResponse> {
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        await this.waitForCooldown();
+        return await this.makeRequest(start, length);
+      } catch (error) {
+        if (attempt === this.maxRetries) {
+          this.logger.error(
+            `Error al obtener estrados después de ${this.maxRetries} intentos: ${error.message}`,
+          );
+          throw error;
+        }
+        this.logger.warn(
+          `Intento ${attempt} fallido. Reintentando en ${this.retryDelay / 1000} segundos...`,
+        );
+        await this.sleep(this.retryDelay);
+      }
+    }
+  }
+
+  private async makeRequest(
+    start: number,
     length: number,
   ): Promise<EstradosResponse> {
     const baseUrl =
@@ -60,8 +90,33 @@ export class EstradosHttpService {
       );
       return response.data;
     } catch (error) {
-      console.log('Error during getting estrados info: ', error);
+      if (error instanceof AxiosError) {
+        this.logger.error(`Error de red: ${error.message}`);
+        if (error.response) {
+          this.logger.error(`Estado de respuesta: ${error.response.status}`);
+          this.logger.error(
+            `Datos de respuesta: ${JSON.stringify(error.response.data)}`,
+          );
+        }
+      } else {
+        this.logger.error(`Error desconocido: ${error.message}`);
+      }
       throw error;
     }
+  }
+
+  private async waitForCooldown(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.cooldownPeriod) {
+      const waitTime = this.cooldownPeriod - timeSinceLastRequest;
+      this.logger.log(`Esperando ${waitTime}ms antes de la siguiente petición`);
+      await this.sleep(waitTime);
+    }
+    this.lastRequestTime = Date.now();
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
