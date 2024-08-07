@@ -1,0 +1,24 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    restart: always
+    environment:
+      SA_PASSWORD: "HolaMundo@"
+      ACCEPT_EULA: "Y"
+      MSSQL_DATABASE: mydatabase
+    ports:
+      - "1433:1433"
+    networks:
+      - backend
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8081:8080"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge

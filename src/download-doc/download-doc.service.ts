@@ -1,17 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import * as puppeteer from 'puppeteer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from 'src/config/logger.config';
 
 @Injectable()
 export class DownloadDocService {
-  private cookies: string[] = [];
   private lastRequestTime: number = 0;
   private readonly cooldownPeriod: number = 5000; // 5 segundos de espera entre peticiones
-
-  constructor(private httpService: HttpService) {}
 
   async descargarArchivo(
     cveDoctoAdjunto: string,
@@ -22,36 +18,49 @@ export class DownloadDocService {
     for (let i = 0; i < maxRetries; i++) {
       try {
         await this.waitForCooldown();
-        await this.obtenerCookies();
 
-        const obtenerDocumentoURL =
-          '/estrados-web/estrados/obtenerDocumentoAdjunto.do';
-        const data = {
-          cveDoctoAdjunto,
-          notificacionesDTO: { cveNotificaciones },
-        };
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
 
-        await this.waitForCooldown();
-        await firstValueFrom(
-          this.httpService.post(obtenerDocumentoURL, data, {
-            headers: {
-              'Content-Type': 'application/json',
-              Cookie: this.cookies.join('; '),
-            },
-          }),
+        // Navegar a la página inicial para establecer sesión
+        await page.goto('https://example.com/estrados-web/');
+
+        // Interceptar y modificar la solicitud para usar el método POST
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+          if (request.url().endsWith('/estrados/obtenerDocumentoAdjunto.do')) {
+            request.continue({
+              method: 'POST',
+              postData: JSON.stringify({
+                cveDoctoAdjunto,
+                notificacionesDTO: { cveNotificaciones },
+              }),
+              headers: {
+                ...request.headers(),
+                'Content-Type': 'application/json',
+              },
+            });
+          } else {
+            request.continue();
+          }
+        });
+
+        // Realizar la solicitud para obtener el documento
+        await page.goto(
+          'https://example.com/estrados-web/estrados/obtenerDocumentoAdjunto.do',
         );
 
+        // Esperar el cooldown antes de descargar el archivo
         await this.waitForCooldown();
-        const descargarURL = '/estrados-web/servlet/MostrarArchivoServlet';
-        const response = await firstValueFrom(
-          this.httpService.get(descargarURL, {
-            responseType: 'arraybuffer',
-            headers: {
-              Cookie: this.cookies.join('; '),
-            },
-          }),
-        );
 
+        // Descargar el archivo
+        const descargarURL =
+          'https://example.com/estrados-web/servlet/MostrarArchivoServlet';
+        const response = await page.goto(descargarURL, {
+          waitUntil: 'networkidle2',
+        });
+
+        const buffer = await response.buffer();
         const fileName = `${fileDocName}_${cveDoctoAdjunto}.pdf`;
         const folderPath = path.join(
           process.cwd(),
@@ -65,33 +74,16 @@ export class DownloadDocService {
           fs.mkdirSync(folderPath, { recursive: true });
         }
 
-        fs.writeFileSync(filePath, response.data);
+        fs.writeFileSync(filePath, buffer);
 
         logger.log(`Archivo guardado como ${filePath}`);
-        this.limpiarCookies();
+        await browser.close();
         return filePath;
       } catch (error) {
         logger.error(`Intento ${i + 1} fallido: ${error.message}`);
         if (i === maxRetries - 1) throw error;
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        this.limpiarCookies();
       }
-    }
-  }
-
-  private async obtenerCookies(): Promise<void> {
-    try {
-      logger.log('Intentando obtener cookies...');
-      const response = await firstValueFrom(
-        this.httpService.get('/estrados-web/', {
-          maxRedirects: 5,
-        }),
-      );
-      this.cookies = response.headers['set-cookie'] || [];
-      logger.log(`Cookies obtenidas: ${this.cookies.join('; ')}`);
-    } catch (error) {
-      logger.error(`Error al obtener cookies: ${error.message}`);
-      throw error;
     }
   }
 
@@ -104,10 +96,5 @@ export class DownloadDocService {
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
     this.lastRequestTime = Date.now();
-  }
-
-  private limpiarCookies(): void {
-    logger.log('Limpiando cookies');
-    this.cookies = [];
   }
 }
