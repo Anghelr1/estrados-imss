@@ -19,17 +19,18 @@ export class DownloadDocService {
       try {
         await this.waitForCooldown();
 
-        const browser = await puppeteer.launch();
+        const browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
-
-        await page.goto(
-          'http://notificacionporestrados.imss.gob.mx/estrados-web',
-        );
 
         await page.setRequestInterception(true);
         page.on('request', (request) => {
-          if (request.url().endsWith('/estrados/obtenerDocumentoAdjunto.do')) {
+          let url = request.url();
+          if (url.startsWith('https://')) {
+            url = url.replace('https://', 'http://');
+          }
+          if (url.endsWith('/estrados/obtenerDocumentoAdjunto.do')) {
             request.continue({
+              url,
               method: 'POST',
               postData: JSON.stringify({
                 cveDoctoAdjunto,
@@ -38,36 +39,37 @@ export class DownloadDocService {
               headers: {
                 ...request.headers(),
                 'Content-Type': 'application/json',
+                Accept: 'application/pdf',
               },
             });
           } else {
-            request.continue();
+            request.continue({ url });
           }
         });
 
-        const response = await page.goto(
-          'https://example.com/estrados-web/estrados/obtenerDocumentoAdjunto.do',
+        await page.goto(
+          'http://notificacionporestrados.imss.gob.mx/estrados-web',
           { waitUntil: 'networkidle2' },
         );
 
-        if (!response.ok()) {
-          throw new Error(`HTTP error! status: ${response.status()}`);
-        }
+        await page.goto(
+          'http://notificacionporestrados.imss.gob.mx/estrados-web/estrados/obtenerDocumentoAdjunto.do',
+          { waitUntil: 'networkidle2' },
+        );
 
         await this.waitForCooldown();
 
         const descargarURL =
-          'https://example.com/estrados-web/servlet/MostrarArchivoServlet';
-        logger.log(`Descargando archivo desde: ${descargarURL}`);
-        const fileResponse = await page.goto(descargarURL, {
+          'http://notificacionporestrados.imss.gob.mx/estrados-web/servlet/MostrarArchivoServlet';
+        const response = await page.goto(descargarURL, {
           waitUntil: 'networkidle2',
         });
 
-        if (!fileResponse.ok()) {
-          throw new Error(`HTTP error! status: ${fileResponse.status()}`);
+        if (!response || response.status() !== 200) {
+          throw new Error('Failed to download the file');
         }
 
-        const buffer = await fileResponse.buffer();
+        const buffer = await response.buffer();
         const fileName = `${fileDocName}_${cveDoctoAdjunto}.pdf`;
         const folderPath = path.join(
           process.cwd(),
@@ -91,6 +93,7 @@ export class DownloadDocService {
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
+    throw new Error('No se pudo descargar el archivo');
   }
 
   private async waitForCooldown(): Promise<void> {
