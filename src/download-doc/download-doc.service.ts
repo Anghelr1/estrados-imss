@@ -7,7 +7,7 @@ import { logger } from 'src/config/logger.config';
 @Injectable()
 export class DownloadDocService {
   private lastRequestTime: number = 0;
-  private readonly cooldownPeriod: number = 5000; // 5 segundos de espera entre peticiones
+  private readonly cooldownPeriod: number = 5000;
 
   async descargarArchivo(
     cveDoctoAdjunto: string,
@@ -22,10 +22,10 @@ export class DownloadDocService {
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
 
-        // Navegar a la página inicial para establecer sesión
-        await page.goto('https://example.com/estrados-web/');
+        await page.goto(
+          'http://notificacionporestrados.imss.gob.mx/estrados-web',
+        );
 
-        // Interceptar y modificar la solicitud para usar el método POST
         await page.setRequestInterception(true);
         page.on('request', (request) => {
           if (request.url().endsWith('/estrados/obtenerDocumentoAdjunto.do')) {
@@ -45,22 +45,29 @@ export class DownloadDocService {
           }
         });
 
-        // Realizar la solicitud para obtener el documento
-        await page.goto(
+        const response = await page.goto(
           'https://example.com/estrados-web/estrados/obtenerDocumentoAdjunto.do',
+          { waitUntil: 'networkidle2' },
         );
 
-        // Esperar el cooldown antes de descargar el archivo
+        if (!response.ok()) {
+          throw new Error(`HTTP error! status: ${response.status()}`);
+        }
+
         await this.waitForCooldown();
 
-        // Descargar el archivo
         const descargarURL =
           'https://example.com/estrados-web/servlet/MostrarArchivoServlet';
-        const response = await page.goto(descargarURL, {
+        logger.log(`Descargando archivo desde: ${descargarURL}`);
+        const fileResponse = await page.goto(descargarURL, {
           waitUntil: 'networkidle2',
         });
 
-        const buffer = await response.buffer();
+        if (!fileResponse.ok()) {
+          throw new Error(`HTTP error! status: ${fileResponse.status()}`);
+        }
+
+        const buffer = await fileResponse.buffer();
         const fileName = `${fileDocName}_${cveDoctoAdjunto}.pdf`;
         const folderPath = path.join(
           process.cwd(),
@@ -69,7 +76,6 @@ export class DownloadDocService {
         );
         const filePath = path.join(folderPath, fileName);
 
-        // Crear la carpeta si no existe
         if (!fs.existsSync(folderPath)) {
           fs.mkdirSync(folderPath, { recursive: true });
         }
